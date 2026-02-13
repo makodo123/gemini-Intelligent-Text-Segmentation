@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, FileAudio, Play, Loader2, StopCircle, Settings, FileText, Clock, User, FileOutput, FileDown, Wand2 } from 'lucide-react';
+import { Upload, FileAudio, Play, Loader2, StopCircle, Settings, FileText, Clock, User, FileOutput, FileDown, Wand2, Sparkles } from 'lucide-react';
 import { decodeAudio, splitAudioBuffer, audioBufferToWav, formatTime, generateSrtContent, parseTimeStringToSeconds, smartSplitSegments } from './utils/audioUtils';
 import { transcribeChunk, MODEL_NAME } from './services/geminiService';
 import { AppStatus, TranscriptSegment, ProcessingStats } from './types';
 import ApiKeyModal from './components/ApiKeyModal';
 import QuotaDisplay from './components/QuotaDisplay';
+import { saveProgress, loadProgress, clearProgress } from './utils/progressStorage';
+import { parseGeminiError, parseAudioError } from './utils/errorHandling';
+import { advancedSplitSegments, SplitMode, SplitOptions } from './utils/advancedSplit';
 
 // Chunk duration in seconds. 
 // Gemini 3 Flash has large context, but splitting helps with progress updates and stability.
@@ -22,6 +25,11 @@ function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [quota, setQuota] = useState(100);
   const [includeTimestamps, setIncludeTimestamps] = useState(true);
+  
+  // 新增：分段模式选择
+  const [splitMode, setSplitMode] = useState<SplitMode>(SplitMode.SENTENCE);
+  const [maxDuration, setMaxDuration] = useState(30);
+  const [maxCharacters, setMaxCharacters] = useState(100);
 
   // Refs
   const abortControllerRef = useRef<boolean>(false);
@@ -67,7 +75,16 @@ function App() {
 
   const handleSmartSplit = () => {
     if (transcripts.length === 0) return;
-    const newTranscripts = smartSplitSegments(transcripts);
+    
+    const options: SplitOptions = {
+      mode: splitMode,
+      maxDuration,
+      maxCharacters,
+      minCharacters: 10,
+      preserveSpeaker: true
+    };
+    
+    const newTranscripts = advancedSplitSegments(transcripts, options);
     setTranscripts(newTranscripts);
   };
 
